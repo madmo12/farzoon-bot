@@ -1,6 +1,9 @@
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 
+const token = process.env.BOT_TOKEN;
+const ADMIN_ID = 8580291786;
+
 // Global Error Handlers to prevent process crash
 process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
@@ -9,9 +12,6 @@ process.on('unhandledRejection', (reason, promise) => {
 process.on('uncaughtException', (err) => {
     console.error('Uncaught Exception thrown:', err);
 });
-
-const token = process.env.BOT_TOKEN;
-const ADMIN_ID = 8580291786;
 
 const bot = new TelegramBot(token, { polling: true });
 
@@ -23,6 +23,7 @@ bot.on('polling_error', (error) => {
         console.error('Polling error:', error);
     }
 });
+
 const { GoogleGenAI } = require("@google/genai");
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -58,12 +59,12 @@ async function askAI(question) {
 User Question: ${question}`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash', // Corrected model name
+      model: 'gemini-1.5-flash', // Standard stable model
       contents: prompt,
     });
     return response.text || "أنا مجرد بوت 🤖 ومقدرش أفيدك في السؤال ده حالياً.";
   } catch (error) {
-    console.error("AI Error:", error.message || error);
+    console.error("AI Error:", error.message || JSON.stringify(error));
     // Specific fallback message requested by user
     return "حصل مشكلة مؤقتة، جرب تاني بعد شوية 🙏";
   }
