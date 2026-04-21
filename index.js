@@ -5,6 +5,33 @@ const token = process.env.BOT_TOKEN;
 const ADMIN_ID = 8580291786;
 
 const bot = new TelegramBot(token, { polling: true });
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+const model = genAI.getGenerativeModel({
+  model: "gemini-1.5-flash"
+});
+// ================== AI ==================
+async function askAI(question) {
+  try {
+    const prompt = `You are an assistant for a Telegram bot called 'Farzoon' used in a charity organization (Resala).
+Your answers must be:
+* Short
+* Clear
+* Relevant to volunteering and sorting activities
+* No hallucination or fake information
+* Friendly Egyptian Arabic tone
+
+User Question: ${question}`;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text();
+  } catch (error) {
+    console.error("AI Error:", error);
+    return "حصل مشكلة، حاول تاني بعد شوية.";
+  }
+}
 
 // ================== DATA ==================
 function loadData() {
@@ -22,6 +49,7 @@ function registerUser(id) {
     saveData(data);
   }
 }
+
 
 // ================== STATE ==================
 const userState = {}; 
@@ -89,9 +117,11 @@ bot.onText(/\/delete/, (msg) => {
 });
 
 // ================== MAIN HANDLER ==================
-bot.on('message', (msg) => {
+bot.on('message', async (msg) => {
   const userId = msg.chat.id;
   const text = msg.text;
+
+  if (!text) return;
 
   const state = userState[userId];
   const data = loadData();
@@ -129,7 +159,12 @@ bot.on('message', (msg) => {
   }
 
   // ========= الوضع العادي =========
+  if (text.startsWith('/')) return;
+
   if (data.qa[text]) {
     bot.sendMessage(userId, data.qa[text]);
+  } else {
+    const aiResponse = await askAI(text);
+    bot.sendMessage(userId, aiResponse);
   }
 });
