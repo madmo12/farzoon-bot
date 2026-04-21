@@ -5,48 +5,54 @@ const token = process.env.BOT_TOKEN;
 const ADMIN_ID = 8580291786;
 
 const bot = new TelegramBot(token, { polling: true });
-const { GoogleGenAI } = require("@google/genai");
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// ================== GROQ ==================
+const OpenAI = require("openai");
+
+const groq = new OpenAI({
+  apiKey: process.env.GROQ_API_KEY,
+  baseURL: "https://api.groq.com/openai/v1"
+});
 
 // ================== AI ==================
 async function askAI(question) {
   try {
-    const prompt = `أنت مساعد رسمي لبوت اسمه "فرزون" خاص بجمعية رسالة.
+    const completion = await groq.chat.completions.create({
+      model: "llama3-8b-8192",
+      messages: [
+        {
+          role: "system",
+          content: `
+أنت مساعد رسمي لبوت اسمه "فرزون" خاص بجمعية رسالة.
 
-المعلومات الأساسية:
-- مسؤول الفرز او اللجنة: معاذ
+المعلومات:
+- مسؤول الفرز: معاذ
 - مسؤول الميديا: علي
 - مسؤول فرزاوي: مروان
 - مسؤول المشاريع: أميرة
 - مسؤول الباك يارد: هاجر
 - مكان الفرز: الباك يارد
 
-قواعد الرد:
-- رد باللهجة المصرية البسيطة
-- خلي الرد مختصر وواضح
-- استخدم المعلومات اللي فوق لما السؤال يكون متعلق بيها
-- متخترعش معلومات من عندك
-
-لو السؤال:
-- غريب
-- أو خارج نطاق الفرز
-- أو مش متأكد منه
-
-رد بـ:
-"أنا مجرد بوت 🤖 ومقدرش أفيدك في السؤال ده، تقدر تسأل حد من المسؤولين وهيفيدوك أكتر او تقدر تختار من الاسئلة الموجودة "
-
-
-User Question: ${question}`;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
+القواعد:
+- رد باللهجة المصرية
+- مختصر وواضح
+- متخترعش معلومات
+- لو السؤال غريب أو خارج النطاق قول:
+"أنا مجرد بوت 🤖 ومقدرش أفيدك، اسأل حد من المسؤولين أو اختار من الأسئلة"
+`
+        },
+        {
+          role: "user",
+          content: question
+        }
+      ]
     });
-    return response.text;
-  } catch (error) {
-    console.error("AI Error:", error);
-    return "حصل مشكلة، حاول تاني بعد شوية.";
+
+    return completion.choices[0].message.content;
+
+  } catch (err) {
+    console.log("AI Error:", err);
+    return "حصل مشكلة مؤقتة، جرب تاني بعد شوية 🙏";
   }
 }
 
@@ -67,10 +73,9 @@ function registerUser(id) {
   }
 }
 
-
 // ================== STATE ==================
 const userState = {};
-// شكلها: { userId: { mode: 'add' | 'delete', step: number, temp: {} } }
+const userCooldown = {}; // منع السبام
 
 // ================== START ==================
 bot.onText(/\/start/, (msg) => {
@@ -143,45 +148,55 @@ bot.on('message', async (msg) => {
   const state = userState[userId];
   const data = loadData();
 
-  // ========= لو المستخدم في وضع معين =========
+  // ========= ADD / DELETE =========
   if (state) {
-    // ===== ADD FLOW =====
     if (state.mode === "add") {
       if (state.step === 1) {
         state.temp.question = text;
         state.step = 2;
         bot.sendMessage(userId, "ابعت الإجابة:");
-      } else if (state.step === 2) {
+      } else {
         data.qa[state.temp.question] = text;
         saveData(data);
-
         bot.sendMessage(userId, "تمت الإضافة ✅");
         delete userState[userId];
       }
       return;
     }
 
-    // ===== DELETE FLOW =====
     if (state.mode === "delete") {
       if (data.qa[text]) {
         delete data.qa[text];
         saveData(data);
-
         bot.sendMessage(userId, "تم الحذف ❌");
       }
-
       delete userState[userId];
       return;
     }
   }
 
-  // ========= الوضع العادي =========
+  // ========= تجاهل الأوامر =========
   if (text.startsWith('/')) return;
 
+  // ========= رد من الداتا =========
   if (data.qa[text]) {
-    bot.sendMessage(userId, data.qa[text]);
-  } else {
-    const aiResponse = await askAI(text);
-    bot.sendMessage(userId, aiResponse);
+    return bot.sendMessage(userId, data.qa[text]);
   }
+
+  // ========= فلترة =========
+  if (text.length < 5) {
+    return bot.sendMessage(userId, "وضح سؤالك أكتر شوية 🤔");
+  }
+
+  // ========= cooldown =========
+  const now = Date.now();
+  if (userCooldown[userId] && now - userCooldown[userId] < 10000) {
+    return bot.sendMessage(userId, "استنى شوية قبل ما تسأل تاني 🙏");
+  }
+
+  userCooldown[userId] = now;
+
+  // ========= AI =========
+  const aiResponse = await askAI(text);
+  bot.sendMessage(userId, aiResponse);
 });
