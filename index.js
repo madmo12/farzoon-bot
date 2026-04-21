@@ -13,12 +13,6 @@ const model = genAI.getGenerativeModel({
   model: "gemini-1.5-flash-latest"
 });
 
-genAI.listModels().then(res => {
-  console.log("AVAILABLE MODELS:", res);
-}).catch(err => {
-  console.log("MODEL ERROR:", err);
-});
-
 // ================== AI ==================
 async function askAI(question) {
   try {
