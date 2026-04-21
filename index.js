@@ -18,7 +18,7 @@ const groq = new OpenAI({
 async function askAI(question) {
   try {
     const completion = await groq.chat.completions.create({
-      model: "llama3-70b-8192",
+      model: "llama3-8b-instant",
       messages: [
         {
           role: "system",
