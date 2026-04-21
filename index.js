@@ -5,13 +5,9 @@ const token = process.env.BOT_TOKEN;
 const ADMIN_ID = 8580291786;
 
 const bot = new TelegramBot(token, { polling: true });
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI } = require("@google/genai");
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-const model = genAI.getGenerativeModel({
-model: "gemini-pro"
-});
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // ================== AI ==================
 async function askAI(question) {
@@ -26,9 +22,11 @@ Your answers must be:
 
 User Question: ${question}`;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return response.text();
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+    });
+    return response.text;
   } catch (error) {
     console.error("AI Error:", error);
     return "حصل مشكلة، حاول تاني بعد شوية.";
