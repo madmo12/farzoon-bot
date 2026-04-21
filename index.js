@@ -26,7 +26,8 @@ Your answers must be:
 User Question: ${question}`;
 
     const result = await model.generateContent(prompt);
-    return result.response.text();
+    const response = await result.response;
+    return response.text();
   } catch (error) {
     console.error("AI Error:", error);
     return "حصل مشكلة، حاول تاني بعد شوية.";
@@ -52,7 +53,7 @@ function registerUser(id) {
 
 
 // ================== STATE ==================
-const userState = {}; 
+const userState = {};
 // شكلها: { userId: { mode: 'add' | 'delete', step: number, temp: {} } }
 
 // ================== START ==================
