@@ -99,6 +99,39 @@ function registerUser(id) {
   }
 }
 
+// ================== INTENT DETECTION ==================
+function detectIntent(text) {
+  const t = text.toLowerCase();
+  
+  const hasAny = (words) => words.some(w => t.includes(w));
+
+  // 1. فرزاوي
+  if (hasAny(["فرزاوي", "فرزاوى"])) {
+    if (hasAny(["مسؤول", "مسئول", "مين"])) return "مسؤول فرزاوي هو: مروان";
+    return "فرزاوي هتقف شوية دلوقتي وهترجع أقوى بعد ما كل الفرزاوية يخلصوا الامتحانات 💪";
+  }
+
+  // 2. المسؤولين
+  if (hasAny(["مسؤول", "مسئول", "مين", "مدير"])) {
+    if (hasAny(["باك يارد", "باكيارد"])) return "مسؤول الباك يارد هي: هاجر";
+    if (hasAny(["ميديا", "الميديا"])) return "مسؤول الميديا هو: علي";
+    if (hasAny(["مشاريع", "المشاريع"])) return "مسؤول المشاريع هي: أميرة";
+    if (hasAny(["hr", "اتش ار", "إتش آر", "اتش آر"])) return "مسؤول الـ HR هي: ايمان، ومساعد مسؤول الـ HR هي: ريماس";
+    if (hasAny(["فرز", "الفرز"])) return "مسؤول الفرز هو: معاذ";
+  }
+
+  // 3. المواعيد والمكان
+  if (hasAny(["مواعيد", "امتى", "ساعة كام", "الساعة", "ميعاد", "وقت"])) {
+    if (hasAny(["فرز", "الفرز"])) return "الفرز شغال كل يوم من الساعة 11 الصبح لـ 6 المغرب، ماعدا يوم الجمعة.";
+  }
+  
+  if (hasAny(["مكان", "فين", "عنوان"])) {
+    if (hasAny(["فرز", "الفرز"])) return "مكان الفرز هو: الباك يارد";
+  }
+
+  return null;
+}
+
 // ================== STATE ==================
 const userState = {};
 const userCooldown = {}; // منع السبام
@@ -215,12 +248,19 @@ bot.on('message', async (msg) => {
     return bot.sendMessage(userId, "انا فرزون 🤖 مساعد ذكي اقدر اساعدك تعرف المعلومات اللي انت عاوزها عن الفرز");
   }
 
+  // ========= Intent Detection (فهم القصد) =========
+  const intentResponse = detectIntent(text);
+  if (intentResponse) {
+    return bot.sendMessage(userId, intentResponse);
+  }
+
   // ========= فلترة =========
   if (text.length < 5) {
     return bot.sendMessage(userId, "وضح سؤالك أكتر شوية 🤔");
   }
 
-  const keywords = ["فرز", "رسالة", "مواعيد", "مكان", "لجنة"];
+  // تحديث الكلمات المفتاحية عشان تقبل أسئلة عن المسؤولين وفرزاوي
+  const keywords = ["فرز", "رسالة", "مواعيد", "مكان", "لجنة", "مسؤول", "مسئول", "ميديا", "باك يارد", "فرزاوي", "hr", "مشاريع"];
   const isRelevant = keywords.some(kw => text.includes(kw));
 
   if (!isRelevant) {
