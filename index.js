@@ -11,7 +11,7 @@ const mainMenu = {
     keyboard: [
       [{ text: "📌 معلومات عن الفرز" }, { text: "👥 المسؤولين" }],
       [{ text: "📅 المواعيد" }, { text: "🎯 فرزاوي" }],
-      [{ text: "ℹ️ عن البوت" }]
+      [{ text: "ℹ️ عن البوت" }, { text: "❓ أسئلة أخرى" }]
     ],
     resize_keyboard: true
   }
@@ -101,11 +101,44 @@ const responses = {
 
 // ================== STATE ==================
 const userCooldown = {};
+const adminState = {};
+let customQuestions = {};
+
+const adminPanelMenu = {
+  reply_markup: {
+    keyboard: [
+      [{ text: "➕ إضافة سؤال" }, { text: "❌ حذف سؤال" }],
+      [{ text: "📋 عرض الأسئلة" }],
+      [{ text: "🔙 خروج من اللوحة" }]
+    ],
+    resize_keyboard: true
+  }
+};
+
+function updateCustomMenu() {
+  const keys = Object.keys(customQuestions);
+  const keyboard = keys.map(k => [{ text: k }]);
+  keyboard.push([{ text: "🔙 رجوع للقائمة الرئيسية" }]);
+  
+  subMenus["❓ أسئلة أخرى"] = {
+    reply_markup: {
+      keyboard,
+      resize_keyboard: true
+    }
+  };
+}
+updateCustomMenu();
 
 // ================== COMMANDS ==================
 bot.onText(/\/start/, (msg) => {
-  const welcomeMessage = `أهلاً بيك يا فرزاوي في بوت الفرز الخاص بجمعية رسالة! 👋🤖\n\nأنا هنا عشان أساعدك وتعرف أي حاجة تخص لجنة الفرز وتفاصيلها. تقدر تختار من القائمة اللي تحت عشان تعرف إجاباتي 👇`;
+  const welcomeMessage = `أهلاً بيك في فرزون 🤖 اختار من القائمة اللي تحت 👇`;
   bot.sendMessage(msg.chat.id, welcomeMessage, mainMenu);
+});
+
+bot.onText(/\/panel/, (msg) => {
+  const userId = msg.chat.id;
+  adminState[userId] = { step: 'IDLE' };
+  bot.sendMessage(userId, "مرحباً بيك في لوحة التحكم ⚙️", adminPanelMenu);
 });
 
 // ================== MAIN MESSAGE HANDLER ==================
@@ -125,11 +158,77 @@ bot.on('message', (msg) => {
   }
   userCooldown[userId] = now;
 
+  // ========= ADMIN FLOW =========
+  if (adminState[userId]) {
+    const state = adminState[userId].step;
+
+    if (text === "🔙 خروج من اللوحة") {
+      delete adminState[userId];
+      return bot.sendMessage(userId, "رجعنا للقائمة الرئيسية 👇", mainMenu);
+    }
+
+    if (text === "➕ إضافة سؤال") {
+      adminState[userId] = { step: 'AWAITING_QUESTION' };
+      return bot.sendMessage(userId, "اكتب السؤال ✏️", { reply_markup: { remove_keyboard: true } });
+    }
+
+    if (text === "❌ حذف سؤال") {
+      const keys = Object.keys(customQuestions);
+      if (keys.length === 0) {
+        return bot.sendMessage(userId, "مفيش أسئلة مضافة حالياً 🤷‍♂️", adminPanelMenu);
+      }
+      adminState[userId] = { step: 'AWAITING_DELETE' };
+      const keyboard = keys.map(k => [{ text: k }]);
+      keyboard.push([{ text: "🔙 خروج من اللوحة" }]);
+      return bot.sendMessage(userId, "اختار السؤال اللي عايز تحذفه 👇", {
+        reply_markup: { keyboard, resize_keyboard: true }
+      });
+    }
+
+    if (text === "📋 عرض الأسئلة") {
+      const keys = Object.keys(customQuestions);
+      if (keys.length === 0) {
+        return bot.sendMessage(userId, "مفيش أسئلة مضافة حالياً 🤷‍♂️", adminPanelMenu);
+      }
+      let msgText = "📋 *الأسئلة الحالية:*\n\n";
+      keys.forEach((k, i) => {
+        msgText += `${i + 1}. *${k}*\n${customQuestions[k]}\n\n`;
+      });
+      return bot.sendMessage(userId, msgText, { parse_mode: "Markdown" });
+    }
+
+    if (state === 'AWAITING_QUESTION') {
+      adminState[userId] = { step: 'AWAITING_ANSWER', tempQuestion: text };
+      return bot.sendMessage(userId, "اكتب الإجابة ✏️");
+    }
+
+    if (state === 'AWAITING_ANSWER') {
+      const q = adminState[userId].tempQuestion;
+      customQuestions[q] = text;
+      adminState[userId] = { step: 'IDLE' };
+      updateCustomMenu();
+      return bot.sendMessage(userId, "تمت الإضافة ✅", adminPanelMenu);
+    }
+
+    if (state === 'AWAITING_DELETE') {
+      if (customQuestions[text]) {
+        delete customQuestions[text];
+        adminState[userId] = { step: 'IDLE' };
+        updateCustomMenu();
+        return bot.sendMessage(userId, "تم الحذف ❌", adminPanelMenu);
+      } else {
+        return bot.sendMessage(userId, "السؤال ده مش موجود، اختار من القائمة 👇");
+      }
+    }
+    
+    return bot.sendMessage(userId, "اختار من القائمة 👇", adminPanelMenu);
+  }
+
   // ========= MENU NAVIGATION =========
   
   // 1. هل المستخدم اختار تصنيف رئيسي لفتح قائمة فرعية؟
   if (subMenus[text]) {
-    return bot.sendMessage(userId, "اختر من القائمة 👇", subMenus[text]);
+    return bot.sendMessage(userId, "اختار من القائمة 👇", subMenus[text]);
   }
 
   // 2. هل المستخدم ضغط على رجوع؟
@@ -142,8 +241,12 @@ bot.on('message', (msg) => {
     return bot.sendMessage(userId, responses[text], { parse_mode: "Markdown" });
   }
 
+  if (customQuestions[text]) {
+    return bot.sendMessage(userId, customQuestions[text], { parse_mode: "Markdown" });
+  }
+
   // 4. في حالة كتابة نص حر أو اختيار مش موجود
-  return bot.sendMessage(userId, "من فضلك اختار من القائمة 👇", mainMenu);
+  return bot.sendMessage(userId, "اختار من القائمة 👇", mainMenu);
 });
 
 bot.on("polling_error", console.log);
